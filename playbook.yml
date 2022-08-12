@@ -1,0 +1,142 @@
+---
+- hosts: all
+  become: true
+  vars_files:
+    - vars/default.yml
+
+  tasks:
+    - name: Enable PHP 7.3
+      shell: sudo add-apt-repository ppa:ondrej/php -y 
+      become: true
+    - name: Update Cache
+      become: true
+      apt:
+       update_cache: yes
+       cache_valid_time: 86400 #One day
+    
+    - name: Install prerequisites
+      apt: name={{ item }} update_cache=yes state=latest force_apt_get=yes
+      loop: [ 'aptitude' ]
+
+ 
+  #Apache Configuration
+    - name: Install LAMP Packages
+      apt: name={{ item }} update_cache=yes state=latest
+      loop: [ 
+       'apache2', 
+       'mysql-server', 
+       'php7.3', 
+       'php7.3-mysql', 
+       'libapache2-mod-php7.3',
+       'freetype*',
+       'php7.3-gd',
+       'openssl',
+       'php7.3-mbstring',
+       'php7.3-pdo-mysql',
+       'php7.3-curl']
+
+
+
+    - name: Remove HTML directory from /var/www/ path
+      file:
+          state: absent
+          path: /var/www/html  
+    
+    
+    - name: Set up Apache virtualhost
+      template:
+        src: "files/apache.conf.j2"
+        dest: "/etc/apache2/sites-available/{{ http_conf }}"
+      notify: Reload Apache
+
+    - name: Enable new site
+      shell: /usr/sbin/a2ensite {{ http_conf }}
+      notify: Reload Apache
+
+    - name: Enable modrewrte
+      shell: /usr/sbin/a2enmod rewrite
+      notify: Reload Apache
+
+    - name: Disable default Apache site
+      shell: /usr/sbin/a2dissite 000-default.conf
+      when: disable_default
+      notify: Reload Apache
+     #Install Composer  
+    
+    - name: Download and install Composer
+      shell: curl -sS https://getcomposer.org/installer | php
+      args:
+        chdir: /usr/src/
+        creates: /usr/local/bin/composer
+        warn: false
+
+
+    - name: Add Composer to global path
+      copy: 
+       dest: /usr/local/bin/composer
+       group: root
+       mode: '0755'
+       owner: root
+       src: /usr/src/composer.phar
+       remote_src: yes
+      
+  #Install Yii Framework
+    - name: Install Yii2 Framework
+      shell: echo yes| sudo composer create-project --prefer-dist yiisoft/yii2-app-basic /var/www/basic
+      become: true
+   
+    - name: Add .htaccess for Pretty URLS
+      template:
+        src: "files/.htaccess.j2"
+        dest: "/var/www/basic/{{ htaccess }}"
+    
+    - name: Update web.php config in Yii2
+      template: 
+        src: "files/web.php.j2"
+        dest: "/var/www/basic/config/{{ WebCfg }}"
+  # MySQL Configuration
+    - name: Sets the root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Removes all anonymous user accounts
+      mysql_user:
+        name: ''
+        host_all: yes
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: Removes the MySQL test database
+      mysql_db:
+        name: test
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+  # UFW Configuration
+    - name: "UFW - Allow HTTP on port {{ http_port }}"
+      ufw:
+        rule: allow
+        port: "{{ http_port }}"
+        proto: tcp
+
+  # PHP Info Page
+    - name: Sets Up PHP Info Page
+      template:
+        src: "files/info.php.j2"
+        dest: "/var/www/basic/web/info.php"
+
+  handlers:
+    - name: Reload Apache
+      service:
+        name: apache2
+        state: reloaded
+
+    - name: Restart Apache
+      service:
+        name: apache2
+        state: restarted
+ 

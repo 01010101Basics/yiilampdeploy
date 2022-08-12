@@ -1,0 +1,31 @@
+<VirtualHost *:{{ http_port }}>
+    ServerAdmin webmaster@localhost
+    #ServerName {{ http_host }}
+    #ServerAlias www.{{ http_host }}
+
+# Set document root to be "basic/web"
+DocumentRoot "/var/www/basic/web"
+
+<Directory "/var/www/basic/web">
+    # use mod_rewrite for pretty URL support
+    RewriteEngine on
+    
+    # if $showScriptName is false in UrlManager, do not allow accessing URLs with script name
+    RewriteRule ^index.php/ - [L,R=404]
+    
+    # If a directory or a file exists, use the request directly
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    
+    # Otherwise forward the request to index.php
+    RewriteRule . index.php
+
+    # ...other settings...
+</Directory>
+ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+    <IfModule mod_dir.c>
+        DirectoryIndex index.php index.html index.cgi index.pl  index.xhtml index.htm
+    </IfModule>
+
+</VirtualHost>

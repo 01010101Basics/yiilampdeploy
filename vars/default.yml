@@ -1,0 +1,9 @@
+mysql_root_password: "Wooki32022!"
+app_user: "vagrant"
+http_host: "10.0.0.12"
+http_conf: "yii2.conf"
+htaccess: ".htaccess"
+http_port: "80"
+disable_default: true
+AppName: "Extra"
+WebCfg: "web.php"
